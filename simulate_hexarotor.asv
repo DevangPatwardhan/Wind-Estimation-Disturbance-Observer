@@ -1,4 +1,4 @@
-function Xdot = simulate_hexarotor(u)
+function Xdot = simulate_hexarotor(X)
 
 global ...
     m g ...
@@ -7,8 +7,6 @@ global ...
     n_rotor rotor_l ...
     rho Cd A ...
     R_nd A_rotor_nd Ct Cq
-X      = u(1:18);
-wind_I = u(19:21);
 
 
 pos     = X(1:3);
@@ -31,6 +29,8 @@ R_bi = R_ib';
 
 vel_I = R_ib * vel_b;
 
+
+wind_I = [u(19); u(20); u(21)];
 wind_b = R_bi * wind_I;
 
 V_rel_b = vel_b - wind_b;
