@@ -12,9 +12,7 @@ function W_I = gust_generator(t)
 % Output:
 %   W_I   - 3x1 wind vector in INERTIAL frame
 
-if nargin < 2
-    mode = 5;   % default mode
-end
+mode = 1;
 
 W_I = [0;0;0];
 
