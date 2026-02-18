@@ -15,6 +15,7 @@ global ...
     n_blades n_segments theta_r ...
     cl_alpha cd_0 aoa_0 sigma r_cout ...
     c_nd r_span_nd ...
+    fwd_vel
 
 
 m = 12;           % kg
@@ -94,3 +95,6 @@ fac = r_cout*R_nd + 0.5*dy;
 for k = 1:n_segments
     r_span_nd(k) = fac + (k-1)*dy;
 end
+fwd_vel = 5;
+
+

@@ -7,8 +7,8 @@ global ...
     n_rotor rotor_l ...
     rho Cd A ...
     R_nd A_rotor_nd Ct Cq
-X      = u(1:18);
-wind_I = u(19:21);
+X      = u(1:21);
+wind_I = u(22:24);
 
 
 pos     = X(1:3);
@@ -19,6 +19,7 @@ psi     = X(6);
 vel_b   = X(7:9);      % body velocity
 omega   = X(10:12);    % p q r
 omega_r = X(13:18);   % rotor speeds
+int_pos = X(19:21);
 
 p = omega(1); 
 q = omega(2); 
@@ -31,13 +32,15 @@ R_bi = R_ib';
 
 vel_I = R_ib * vel_b;
 
+
 wind_b = R_bi * wind_I;
 
 V_rel_b = vel_b - wind_b;
 
+% int_pos = max(min(int_pos, 10), -10);
 
 
-flight_mode = 'climb';   
+flight_mode = 'hover';   
 
 switch flight_mode
     case 'hover'
@@ -47,36 +50,65 @@ switch flight_mode
         pos_des = [0;0;50];
         vel_des = [0;0;5];
     case 'forward'
-        pos_des = [100;0;0];
+        pos_des = [50;0;10];
         vel_des = [5;0;0];
 end
 
 
 
+switch flight_mode
+
+    case 'hover'
+        
+        % --- Position Gains (Hover) ---
+        Kp_pos = 0.6;
+        Kd_pos = 3.2;
+        Ki_pos = 0.1;
+        
+        % --- Attitude Gains (Hover) ---
+        Kp_att = diag([8 8 3.0]);
+        Kd_att = diag([5 5 1.5]);
+        
+        
+    case 'climb'
+        
+        % --- Position Gains (Climb) ---
+        Kp_pos = diag([0.6 0.6 1.5]);
+        Kd_pos = diag([2.0 2.0 3]);
+        Ki_pos = diag([0.05 0.05 0.05]);
+
+        % --- Attitude Gains (Climb) ---
+        Kp_att = diag([7 7 3]);
+        Kd_att = diag([4.5 4.5 2]);
+            
+    case 'forward'
+        
+    % --- Position(Forward Flight) ---
+    Kp_pos = diag([2 0.5 0.8]);  
+    Kd_pos = diag([4 2.0 3.0]);     
+    Ki_pos = diag([0.01 0.05 0.0]);  
+    
+    % --- Attitude  (Forward Flight) ---
+    Kp_att = diag([7 7 2.5]);
+    Kd_att = diag([4.5 4.5 1.5]);
+        
+end
 
 
 psi_des = 0;
-
-% --- Position loop (outer loop)
-Kp_pos = 1.5;
-Kd_pos = 2.5;    % damping term
-
-% --- Attitude loop (inner loop)
-Kp_att_rollpitch = 8;
-Kd_att_rollpitch = 4.5;
-
-Ki_pos = 0.1;  % tune
-
 
 
 pos_err = pos_des - pos;
 vel_err = vel_des - vel_I;
 
+
 % IMP commmanding control eq -- (do not change this, change the gains instead- Devang)
-v_cmd = Kp_pos * pos_err;
-v_max = 5;  % or whatever you want
-v_cmd = max(min(v_cmd, v_max), -v_max);
-a_cmd = Kd_pos * (v_cmd - vel_I);
+
+a_cmd = Kp_pos * pos_err + Kd_pos * vel_err + Ki_pos*int_pos;
+
+% acceleration saturation 
+a_max = 3;
+a_cmd = max(min(a_cmd, a_max), -a_max);
 
 
 F_des_I = m*(a_cmd + [0;0;g]);
@@ -105,10 +137,6 @@ e_R = [e_R_mat(3,2);
 
 e_omega = omega;   % desired body rates = 0
 
-% Control law
-Kp_att = diag([Kp_att_rollpitch Kp_att_rollpitch 2.0]);
-Kd_att = diag([Kd_att_rollpitch Kd_att_rollpitch 1.5]);
-
 tau_cmd = -Kp_att*e_R - Kd_att*e_omega;
 
 
@@ -135,11 +163,6 @@ for i = 1:6
         M(4,i) =  Cq;
     end
 end
-
-
-
-
-
 
 
 
@@ -216,11 +239,14 @@ pos_dot = vel_I;
 
 
 
-tau_motor = 0.03;
+tau_motor = 0.08;
 omega_cmd = sqrt(T_i./(rho*A_rotor_nd*Ct*R_nd^2 + 1e-6));
 omega_r_dot = (omega_cmd - omega_r)/tau_motor;
+    
+int_dot = pos_err;
 
-int_pos_err = pos_err;
+  
+
 
 Xdot = [
     pos_dot;
@@ -228,6 +254,8 @@ Xdot = [
     vel_dot;
     omega_dot;
     omega_r_dot;
+    int_dot;
+
 ];
 
 end

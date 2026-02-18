@@ -12,7 +12,7 @@ function W_I = gust_generator(t)
 % Output:
 %   W_I   - 3x1 wind vector in INERTIAL frame
 
-mode = 1;
+mode = 2;
 
 W_I = [0;0;0];
 
@@ -30,7 +30,7 @@ switch mode
     case 2
         t0 = 2; 
         Tr = 3;
-        Wmax = [0;0;4];
+        Wmax = [0;0;2];
 
         if t >= t0 && t <= t0+Tr
             W_I = Wmax*(t-t0)/Tr;
