@@ -1,8 +1,8 @@
 function d_raw = disturbance(u)
 
-global m g
+global m 
 
-F = [u(1); u(2); u(3)];
+F = [u(1); u(2); u(3) + m*g];
 v_dot = [u(4); u(5); u(6)];
 
 

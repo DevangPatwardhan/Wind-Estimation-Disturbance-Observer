@@ -1,126 +1,117 @@
 function FT = dynamics(u)
 
-% ===============================================================
-% HIGH-FIDELITY HEXAROTOR FORCE–MOMENT MODEL
-% Supports:
-%   0 = KW^2 model
-%   1 = Uniform inflow momentum theory
-%   2 = Radial BEMT
-% Returns dimensional [Fx Fy Fz Tx Ty Tz]' in BODY frame
-% ===============================================================
+% Fully dimensional rotor force–moment model
+% Returns [Fx Fy Fz Tx Ty Tz]' in BODY frame (SI units)
 
-% Extract states
 
-x     = u(1); %#ok<NASGU>
-y     = u(2); %#ok<NASGU>
-z     = u(3); %#ok<NASGU>
-phi   = u(4); %#ok<NASGU>
-theta = u(5); %#ok<NASGU>
-psi   = u(6); %#ok<NASGU>
-ub    = u(7);
-vb    = u(8);
-wb    = u(9);
-p     = u(10);
-q     = u(11);
-r     = u(12);
-Omega = u(13:18);   % rad/s
+x = u(1);
+y = u(2);
+z = u(3);
 
+
+phi   = u(4);
+theta = u(5);
+psi   = u(6);
+
+ub = u(7);
+vb = u(8);
+wb = u(9);
+
+p = u(10);
+q = u(11);
+r = u(12);
+
+Omega = u(13:18);   % rad/s (DIMENSIONAL)
+
+R_ib = eul2rotm([psi, theta, phi]);  
 vel_b   = [ub; vb; wb];
 omega_b = [p; q; r];
 
-% Load Globals
 
-global n_rotor rotor_l_nd
-global rho_nd A_rotor_nd
+global n_rotor rotor_l
+global rho R A_rotor
 global Ct Cq
 global use_bemt
 global n_blades n_segments theta_r
-global cl_alpha cd_0 aoa_0 sigma r_cout
-global r_span_nd c_nd
-global F_c L_c M_c
+global cl_alpha cd_0 aoa_0
+global c r_span
 
-% Rotor geometry (non-dimensional)
+% Rotor Geometry
 
 angles = (0:n_rotor-1)*(2*pi/n_rotor);
 
 rotor_pos = [ ...
-    rotor_l_nd*cos(angles);
-    rotor_l_nd*sin(angles);
+    rotor_l*cos(angles);
+    rotor_l*sin(angles);
     zeros(1,n_rotor)];
 
 spin = ones(n_rotor,1);
 spin(2:2:end) = -1;
 
-% Initialize totals (non-dimensional)
 
-F_nd = zeros(3,1);
-M_nd = zeros(3,1);
-
+% Initialize totals
+F_total = zeros(3,1);
+M_total = zeros(3,1);
 
 % LOOP OVER ROTORS
 
 for i = 1:n_rotor
     
-    pos_i = rotor_pos(:,i);
+    pos_i   = rotor_pos(:,i);
     Omega_i = Omega(i);
     
-    % Velocity at disk (non-dimensional)
+    % Velocity at rotor disk (BODY frame)
     V_disk = vel_b + cross(omega_b,pos_i);
     Vz = V_disk(3);
     
-    % Rotor radius (non-dimensional)
-    R = sqrt(A_rotor_nd/pi);
-    A = A_rotor_nd;
-    
-
     % MODEL SELECTION
 
-    
     if use_bemt == 0
-
-        % KW^2 MODEL
-
-        T_nd = Ct * rho_nd * A * Omega_i^2 * R^2;
-        Q_nd = Cq * rho_nd * A * Omega_i^2 * R^3;
+        
+        % ---- KW^2 MODEL ----
+        
+        T = Ct * rho * A_rotor * (Omega_i * R)^2;
+        Q = Cq * rho * A_rotor * (Omega_i * R)^2 * R;
         
     elseif use_bemt == 1
- 
-        % UNIFORM INFLOW MOMENTUM THEORY
-
+        
+        % ---- Uniform Inflow Momentum Theory ----
+        
         vi = 0;
         
         for k = 1:25
-            T_mom = 2*rho_nd*A*vi*(Vz+vi);
             
-            lambda = (Vz+vi)/(Omega_i*R + 1e-6);
-            CT_be  = Ct*(1 - lambda); % simplified correction
+            T_mom = 2*rho*A_rotor*vi*(Vz + vi);
             
-            T_be = CT_be*rho_nd*A*(Omega_i*R)^2;
+            lambda = (Vz + vi)/(Omega_i*R + 1e-6);
+            CT_be  = Ct*(1 - lambda);
             
-            dT = 2*rho_nd*A*(Vz+2*vi);
-            vi = vi - (T_mom - T_be)/(dT+1e-6);
+            T_be = CT_be * rho * A_rotor * (Omega_i*R)^2;
+            
+            dT = 2*rho*A_rotor*(Vz + 2*vi);
+            vi = vi - (T_mom - T_be)/(dT + 1e-6);
         end
         
-        T_nd = 2*rho_nd*A*vi*(Vz+vi);
-        Q_nd = T_nd * R * sqrt(abs(T_nd)/(2*rho_nd*A+1e-6));
+        T = 2*rho*A_rotor*vi*(Vz + vi);
+        Q = T * R * sqrt(abs(T)/(2*rho*A_rotor + 1e-6));
         
     else
-
-        % RADIAL BEMT
-
         
-        T_nd = 0;
-        Q_nd = 0;
+        % ---- Radial BEMT ----
+        
+        T = 0;
+        Q = 0;
+        
+        dr = r_span(2) - r_span(1);
         
         for k = 1:n_segments
             
-            r_loc = r_span_nd(k);
-            dr    = r_span_nd(2)-r_span_nd(1);
+            r_loc = r_span(k);
             
-            Ut = Omega_i*r_loc;
+            Ut = Omega_i * r_loc;
             Ua = Vz;
             
-            phi_i = atan2(Ua,Ut);
+            phi_i = atan2(Ua, Ut);
             
             alpha = theta_r - phi_i - aoa_0;
             
@@ -129,35 +120,32 @@ for i = 1:n_rotor
             
             Vrel2 = Ut^2 + Ua^2;
             
-            dL = 0.5*rho_nd*Vrel2*c_nd*Cl*dr;
-            dD = 0.5*rho_nd*Vrel2*c_nd*Cd*dr;
+            dL = 0.5*rho*Vrel2*c*Cl*dr;
+            dD = 0.5*rho*Vrel2*c*Cd*dr;
             
             dT = n_blades*( dL*cos(phi_i) - dD*sin(phi_i) );
             dQ = n_blades*( r_loc*(dL*sin(phi_i) + dD*cos(phi_i)) );
             
-            T_nd = T_nd + dT;
-            Q_nd = Q_nd + dQ;
+            T = T + dT;
+            Q = Q + dQ;
         end
     end
     
-    % Convert to force vector (body frame)
 
-    F_i = [0;0;-T_nd];
+    % Force & Moment Contribution
+
     
-    %% Moment contributions
-    M_offset = cross(pos_i,F_i);
-    M_react  = [0;0;spin(i)*Q_nd];
+    F_i = [0; 0; -T];          % thrust along -Z body
+    % M_offset = cross(pos_i, F_i);
+    % M_react  = [0; 0; spin(i)*Q];
     
-    M_i = M_offset + M_react;
-    
-    F_nd = F_nd + F_i;
-    M_nd = M_nd + M_i;
+    F_total = F_total + F_i;
+    M_total = M_total; %+ M_offset + M_react;
 end
 
-% Convert back to dimensional
-F_b = F_nd * F_c;
-M_b = M_nd * (F_c*L_c);
+% Output
 
-FT = [F_b; M_b];
+
+FT = [F_total; M_total];
 
 end

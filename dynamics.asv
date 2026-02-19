@@ -1,0 +1,169 @@
+function FT = dynamics(u)
+
+% Supports:
+%   0 = KW^2 model
+%   1 = Uniform inflow momentum theory
+%   2 = Radial BEMT
+% Returns dimensional [Fx Fy Fz Tx Ty Tz]' in BODY frame
+
+
+% Extract states
+
+x     = u(1); 
+y     = u(2); 
+z     = u(3); 
+phi   = u(4); 
+theta = u(5); 
+psi   = u(6);
+ub    = u(7);
+vb    = u(8);
+wb    = u(9);
+p     = u(10);
+q     = u(11);
+r     = u(12);
+Omega = u(13:18);   % rad/s
+
+
+
+
+R_ib = eul2rotm([psi, theta phi]);   % body -> inertial
+R_bi = R_ib';
+
+vel_b   = [ub; vb; wb];
+omega_b = [p; q; r];
+
+% Load Globals
+
+global n_rotor rotor_l_nd
+global rho_nd A_rotor_nd
+global Ct Cq
+global use_bemt
+global n_blades n_segments theta_r
+global cl_alpha cd_0 aoa_0 sigma r_cout
+global r_span_nd c_nd
+global F_c L_c M_c
+
+% Rotor geometry (non-dimensional)
+
+angles = (0:n_rotor-1)*(2*pi/n_rotor);
+
+rotor_pos = [ ...
+    rotor_l_nd*cos(angles);
+    rotor_l_nd*sin(angles);
+    zeros(1,n_rotor)];
+
+spin = ones(n_rotor,1);
+spin(2:2:end) = -1;
+
+% Initialize totals (non-dimensional)
+
+F_nd = zeros(3,1);
+M_nd = zeros(3,1);
+
+
+% LOOP OVER ROTORS
+
+for i = 1:n_rotor
+    
+    pos_i = rotor_pos(:,i);
+    Omega_i = Omega(i);
+    
+    % Velocity at disk (non-dimensional)
+    V_disk = vel_b + cross(omega_b,pos_i);
+    Vz = V_disk(3);
+    
+    % Rotor radius (non-dimensional)
+    R = sqrt(A_rotor_nd/pi);
+    A = A_rotor_nd;
+    disp(i)
+    disp(Omega_i)
+
+
+    % MODEL SELECTION
+
+    
+    if use_bemt == 0
+
+        % KW^2 MODEL
+
+        T_nd = Ct * rho_nd * A * Omega_i^2 * R^2;
+        Q_nd = Cq * rho_nd * A * Omega_i^2 * R^3;
+        
+    elseif use_bemt == 1
+ 
+        % UNIFORM INFLOW MOMENTUM THEORY
+
+        vi = 0;
+        
+        for k = 1:25
+            T_mom = 2*rho_nd*A*vi*(Vz+vi);
+            
+            lambda = (Vz+vi)/(Omega_i*R + 1e-6);
+            CT_be  = Ct*(1 - lambda); % simplified correction
+            
+            T_be = CT_be*rho_nd*A*(Omega_i*R)^2;
+            
+            dT = 2*rho_nd*A*(Vz+2*vi);
+            vi = vi - (T_mom - T_be)/(dT+1e-6);
+        end
+        
+        T_nd = 2*rho_nd*A*vi*(Vz+vi);
+        Q_nd = T_nd * R * sqrt(abs(T_nd)/(2*rho_nd*A+1e-6));
+        
+    else
+
+        % RADIAL BEMT
+
+        
+        T_nd = 0;
+        Q_nd = 0;
+        
+        for k = 1:n_segments
+            
+            r_loc = r_span_nd(k);
+            dr    = r_span_nd(2)-r_span_nd(1);
+            
+            Ut = Omega_i*r_loc;
+            Ua = Vz;
+            
+            phi_i = atan2(Ua,Ut);
+            
+            alpha = theta_r - phi_i - aoa_0;
+            
+            Cl = cl_alpha * alpha;
+            Cd = cd_0;
+            
+            Vrel2 = Ut^2 + Ua^2;
+            
+            dL = 0.5*rho_nd*Vrel2*c_nd*Cl*dr;
+            dD = 0.5*rho_nd*Vrel2*c_nd*Cd*dr;
+            
+            dT = n_blades*( dL*cos(phi_i) - dD*sin(phi_i) );
+            dQ = n_blades*( r_loc*(dL*sin(phi_i) + dD*cos(phi_i)) );
+            
+            T_nd = T_nd + dT;
+            Q_nd = Q_nd + dQ;
+        end
+    end
+    
+    % Convert to force vector (body frame)
+
+    F_i = [0;0;-T_nd];
+    
+    %% Moment contributions
+    M_offset = cross(pos_i,F_i);
+    M_react  = [0;0;spin(i)*Q_nd];
+    
+    M_i = M_offset + M_react;
+    
+    F_nd = F_nd + F_i;
+    M_nd = M_nd + M_i;
+end
+
+% Convert back to dimensional
+F_b = F_nd;
+M_b = M_nd * (F_c*L_c);
+
+FT = [F_b; M_b];
+
+end

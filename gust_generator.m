@@ -12,7 +12,7 @@ function W_I = gust_generator(t)
 % Output:
 %   W_I   - 3x1 wind vector in INERTIAL frame
 
-mode = 2;
+mode = 5;
 
 W_I = [0;0;0];
 
@@ -30,7 +30,7 @@ switch mode
     case 2
         t0 = 2; 
         Tr = 3;
-        Wmax = [0;0;2];
+        Wmax = [0;0;5];
 
         if t >= t0 && t <= t0+Tr
             W_I = Wmax*(t-t0)/Tr;
@@ -41,7 +41,7 @@ switch mode
     %% 3. 1-Cosine gust (axial z-direction)
     case 3
         t0 = 3; 
-        Tg = 3;
+        Tg = 30;
         Wmax = [0;0;3];
 
         if t >= t0 && t <= t0+Tg

@@ -1,5 +1,9 @@
 function Xdot = simulate_hexarotor(u)
 
+
+flight_mode = 'hover';   
+
+
 global ...
     m g ...
     Ixx Iyy Izz Ixy Ixz Iyz ...
@@ -40,7 +44,7 @@ V_rel_b = vel_b - wind_b;
 % int_pos = max(min(int_pos, 10), -10);
 
 
-flight_mode = 'hover';   
+
 
 switch flight_mode
     case 'hover'

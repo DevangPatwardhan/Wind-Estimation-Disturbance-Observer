@@ -2,10 +2,21 @@ function v_rel= draginversion(u)
 
 
 d_hat = [u(1); u(2); u(3)]; 
-global rho Cd A 
+% Force dimension
+d_hat = reshape(d_hat,3,1);
 
-eps_d = 1e-6;                 % small threshold to avoid sqrt(0)
-d_mag = max(abs(d_hat), eps_d);
+v_rel = zeros(3,1);   % preallocate fixed size
 
-v_rel = sign(d_hat) .* sqrt( 2*d_mag ./ (rho*Cd*A) );
+rho = 1.225;
+Cd  = 1.0;
+A   = 0.1;
 
+k = 0.5*rho*Cd*A;
+
+d_norm = sqrt(d_hat.'*d_hat);
+
+if d_norm > 1e-6
+    v_mag = sqrt(d_norm/k);
+    v_rel(:) = v_mag * (d_hat/d_norm);
+end
+end
